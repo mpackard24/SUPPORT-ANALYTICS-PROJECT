@@ -1,0 +1,33 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# dbt
+target/
+dbt_packages/
+logs/
+.user.yml
+package-lock.yml
+
+# Data artifacts (regenerate via pipeline; do not commit large CSVs/Parquet)
+data/generated/*
+!data/generated/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+
+# Keep reference configs
+!data/reference/**
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Streamlit
+.streamlit/secrets.toml

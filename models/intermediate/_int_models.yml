@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: int_ticket_metrics
+    description: >
+      Ticket-level business-hours SLA flags and support-cost proxy.
+      Incremental on ticket_id / created_at. Use --full-refresh after re-simulation.
+    columns:
+      - name: ticket_id
+        description: Primary key
+        tests:
+          - unique
+          - not_null
+      - name: created_at
+        tests:
+          - not_null
+      - name: is_fr_sla_eligible
+        description: True when first_response_time_hours is present
+        tests:
+          - not_null
+      - name: is_res_sla_eligible
+        description: True when ticket is solved with a solved_at timestamp
+        tests:
+          - not_null
+      - name: met_first_response_sla
+        description: Pass/fail for first-response SLA (null if ineligible)
+      - name: met_resolution_sla
+        description: Pass/fail for resolution SLA (null if ineligible)
+      - name: support_cost_hours
+        description: resolution_time_hours + reopen_count * reopen_cost_hours
+        tests:
+          - not_null
+      - name: first_response_sla_hours
+        description: SLA target in business hours (default 24)
+        tests:
+          - not_null
+      - name: resolution_sla_hours
+        description: SLA target in business hours (default 24)
+        tests:
+          - not_null

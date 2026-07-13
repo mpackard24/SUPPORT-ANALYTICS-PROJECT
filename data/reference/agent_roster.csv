@@ -1,0 +1,35 @@
+agent_id,name,support_group,manager,languages,start_date,end_date,active,region
+101,Alex Rivera,Tier 1,Sarah Chen,"en,es",2022-03-15,,true,US
+102,Jordan Patel,Tier 1,Sarah Chen,en,2023-06-01,,true,US
+103,Sam Taylor,Tier 1,Sarah Chen,"en,fr",2025-07-08,,true,US
+104,Casey Morgan,Tier 1,Sarah Chen,en,2023-02-12,,true,US
+105,Riley Quinn,Tier 1,Sarah Chen,"en,de",2022-09-20,,true,US
+106,Sam Morgan,Tier 1,Sarah Chen,"en,fr",2024-11-08,,true,EMEA
+107,Casey Quinn,Tier 1,Sarah Chen,en,2020-02-12,,true,EMEA
+108,Riley Taylor,Tier 1,Sarah Chen,"en,de",2021-09-20,,true,EMEA
+109,Sam Harper,Tier 1,Sarah Chen,"en,fr",2022-11-08,,true,EMEA
+110,Casey Barker,Tier 1,Sarah Chen,en,2024-02-12,,true,EMEA
+111,Drew Skyler,Tier 1,Sarah Chen,"en,de",2022-09-20,,true,APAC
+112,Sam Tyler,Tier 1,Sarah Chen,"en,fr",2022-11-08,,true,APAC
+113,Casey Phoenix,Tier 1,Sarah Chen,en,2025-07-12,,true,APAC
+114,Riley Skyler,Tier 1,Sarah Chen,"en,de",2025-04-20,,true,APAC
+201,Morgan Ellis,Tier 2,James Okonkwo,"en,es,pt",2020-07-14,,true,US
+202,Jamie Brooks,Tier 2,James Okonkwo,"en,fr",2022-01-10,,true,US
+203,Avery Cameron,Tier 2,James Okonkwo,en,2024-04-03,,true,US
+204,Reese Harper,Tier 2,James Okonkwo,"en,it",2025-04-22,,true,US
+205,Jamie Harper,Tier 2,James Okonkwo,en,2026-01-22,,true,APAC
+301,Drew Sullivan,Enterprise,Elena Vasquez,"en,es",2019-05-06,,true,US
+302,Cameron Reed,Enterprise,Elena Vasquez,"en,fr,de",2022-10-17,,true,EMEA
+303,Taylor Hayes,Enterprise,Elena Vasquez,en,2024-12-01,,true,EMEA
+304,Robin Barker,Enterprise,Elena Vasquez,en,2023-09-23,,true,US
+305,Tyler Sullivan,Enterprise,Elena Vasquez,en,2023-12-01,,true,US
+306,Gary Barker,Enterprise,Elena Vasquez,en,2025-09-23,,true,APAC
+307,Tyler Smith,Enterprise,Elena Vasquez,en,2024-12-01,,true,APAC
+401,Phoenix Grant,Technical Quality,Mei Lin,"en,es",2020-02-28,,true,US
+402,Skyler Bennett,Technical Quality,Mei Lin,"en,fr",2021-06-15,,true,EMEA
+403,Harper Quinn,Technical Quality,Mei Lin,"en,de,it",2023-01-05,,true,EMEA
+404,Bennett Skyler,Technical Quality,Mei Lin,"en,de,it",2025-03-05,,true,APAC
+405,Harper Wayne,Technical Quality,Mei Lin,"en,de,it",2026-03-05,,true,EMEA
+406,Stark Skyler,Technical Quality,Mei Lin,"en,de,it",2024-03-05,,true,APAC
+407,Allen Grant,Technical Quality,Mei Lin,"en,es",2020-02-28,,true,US
+408,Phoenix River,Technical Quality,Mei Lin,"en,es",2025-08-28,,true,US

@@ -1,0 +1,14 @@
+# Productivity ramp — new hires reach full capacity over N calendar days.
+# Multiplier scales linearly from min_ramp_multiplier → 1.0.
+
+ramp_days_to_full_productivity:
+  Tier 1: 45
+  Tier 2: 60
+  Enterprise: 70
+  Technical Quality: 90
+
+# Day-1 productivity as a fraction of fully ramped capacity (e.g. 0.35 = 35%)
+min_ramp_multiplier: 0.35
+
+# linear | smooth (smooth uses sqrt curve for gradual early gains)
+ramp_curve: linear

@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: mart_daily_metrics
+    description: >
+      Daily and weekly operational KPIs (volume, solve rate, CSAT, urgency).
+      Incremental delete+insert over a trailing lookback window.
+    columns:
+      - name: period_grain
+        description: "day or week"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["day", "week"]
+      - name: period_start
+        description: Start date of the period
+        tests:
+          - not_null
+      - name: ticket_volume
+        tests:
+          - not_null
+
+  - name: mart_sla_performance
+    description: >
+      SLA attainment by priority, support group, enterprise segment, and overall.
+    columns:
+      - name: slice_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["priority", "support_group", "enterprise_segment", "overall"]
+      - name: slice_value
+        tests:
+          - not_null
+      - name: pct_within_first_response_sla
+        description: Share of FR-eligible tickets within SLA
+      - name: pct_within_resolution_sla
+        description: Share of resolution-eligible tickets within SLA
+
+  - name: mart_priority_scoring
+    description: >
+      Category-level multi-signal priority scores for product/ops attention.
+    columns:
+      - name: priority_rank
+        tests:
+          - unique
+          - not_null
+      - name: category
+        tests:
+          - unique
+          - not_null
+      - name: priority_score
+        description: Weighted 0–100 composite score
+        tests:
+          - not_null
+      - name: rationale
+        description: Human-readable driver summary
+        tests:
+          - not_null

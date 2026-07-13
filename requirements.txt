@@ -1,0 +1,13 @@
+# Requires Python >=3.10 (Streamlit blocks 3.9.7 specifically)
+pandas
+numpy
+faker
+duckdb
+dbt-core
+dbt-duckdb
+streamlit>=1.40
+plotly
+python-dateutil
+pyarrow
+pyyaml
+protobuf>=6,<7

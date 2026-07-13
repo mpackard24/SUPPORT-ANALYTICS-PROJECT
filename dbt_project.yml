@@ -1,0 +1,52 @@
+# Support Analytics — dbt project (DuckDB)
+# Docs: https://docs.getdbt.com/docs/build/projects
+
+name: support_analytics
+version: 1.0.0
+config-version: 2
+
+profile: support_analytics
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # SLA policy: Mon–Fri 09:00–17:00 America/Los_Angeles; fail after 3 business days
+  sla_timezone: "America/Los_Angeles"
+  sla_business_hours_target: 24
+  reopen_cost_hours: 4.0
+  # Priority scoring weights (must sum to 1.0)
+  priority_weight_frequency: 0.25
+  priority_weight_enterprise: 0.30
+  priority_weight_support_cost: 0.25
+  priority_weight_sentiment: 0.20
+  # Where Streamlit reads Parquet exports
+  export_dir: "data/processed"
+
+models:
+  support_analytics:
+    +on_schema_change: "sync_all_columns"
+
+    staging:
+      +materialized: view
+      +docs:
+        node_color: "#CD7F32"
+
+    intermediate:
+      +materialized: incremental
+      +docs:
+        node_color: "#A9A9A9"
+
+    marts:
+      +materialized: table
+      +docs:
+        node_color: "#4169E1"
+
+# Export app-facing tables to Parquet after each successful run
+on-run-end:
+  - "{{ export_app_parquets() }}"

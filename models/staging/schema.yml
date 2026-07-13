@@ -1,0 +1,194 @@
+version: 2
+
+models:
+  - name: stg_agents
+    description: >
+      Cleaned agent dimension from the roster export. One row per agent.
+    columns:
+      - name: agent_id
+        description: Primary key — agent identifier
+        data_tests:
+          - unique
+          - not_null
+      - name: agent_name
+        description: Agent display name
+        data_tests:
+          - not_null
+      - name: agent_group
+        description: Support group / team assignment
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Tier 1", "Tier 2", "Enterprise", "Technical Quality"]
+      - name: agent_languages
+        description: Comma-separated language codes the agent supports
+      - name: agent_start_date
+        description: Employment start date (local)
+      - name: agent_manager
+        description: Manager name
+      - name: agent_is_active
+        description: Whether the agent is currently active on the roster
+        data_tests:
+          - not_null
+      - name: agent_region
+        description: Scheduling region
+
+  - name: stg_tickets
+    description: >
+      Cleaned ticket grain with lifecycle flags, calendar grains, and agent
+      enrichment. One row per ticket. Upstream of intermediate SLA metrics and
+      operational marts.
+    columns:
+      - name: ticket_id
+        description: Primary key — unique ticket identifier
+        data_tests:
+          - unique
+          - not_null
+      - name: created_at
+        description: Ticket created timestamp (UTC)
+        data_tests:
+          - not_null
+      - name: updated_at
+        description: Last update timestamp
+      - name: solved_at
+        description: Resolution timestamp when status is solved/closed
+      - name: status
+        description: Normalized lifecycle status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["open", "pending", "hold", "solved", "closed"]
+              config:
+                severity: warn
+      - name: priority
+        description: Normalized priority
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["low", "normal", "high", "urgent"]
+      - name: channel
+        description: Intake channel (email, chat, etc.)
+      - name: subject
+        description: Ticket subject line
+      - name: description
+        description: Ticket body / description
+      - name: assignee_id
+        description: Foreign key to stg_agents.agent_id (null if unassigned)
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_agents')
+                field: agent_id
+              config:
+                severity: warn
+                where: "assignee_id is not null"
+      - name: assignee_name
+        description: Assignee display name from simulation
+      - name: support_group
+        description: Routing team
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Tier 1", "Tier 2", "Enterprise", "Technical Quality"]
+      - name: assignee_languages
+        description: Languages associated with the assignee at assignment time
+      - name: requester_id
+        description: Requester identifier
+        data_tests:
+          - not_null
+      - name: requester_name
+        description: Requester display name
+      - name: requester_email
+        description: Lowercased requester email
+      - name: language
+        description: Requester language code
+      - name: category
+        description: Issue category used for prioritization
+        data_tests:
+          - not_null
+      - name: tags
+        description: Raw tags string
+      - name: is_enterprise_flag
+        description: Raw enterprise flag from intake
+      - name: customer_tier
+        description: Customer tier label
+      - name: satisfaction_rating
+        description: CSAT rating 1–5 when present
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 5
+                inclusive: true
+              config:
+                where: "satisfaction_rating is not null"
+      - name: resolution_time_hours
+        description: Calendar hours from create to solve
+      - name: first_response_time_hours
+        description: Calendar hours from create to first response
+      - name: reopen_count
+        description: Count of reopen events
+        data_tests:
+          - not_null
+      - name: tickets_source
+        description: Provenance (simulation vs generated)
+      - name: is_solved
+        description: True when status is solved or closed
+        data_tests:
+          - not_null
+      - name: is_open
+        description: True when status is open or pending
+        data_tests:
+          - not_null
+      - name: is_enterprise
+        description: Enterprise customer (flag or Enterprise support group)
+        data_tests:
+          - not_null
+      - name: is_high_urgency
+        description: True when priority is high or urgent
+        data_tests:
+          - not_null
+      - name: has_csat
+        description: True when a satisfaction rating exists
+        data_tests:
+          - not_null
+      - name: is_low_csat
+        description: True when CSAT is 1 or 2
+      - name: created_date
+        description: Calendar date of created_at
+        data_tests:
+          - not_null
+      - name: created_week
+        description: Week start date (DuckDB date_trunc week)
+        data_tests:
+          - not_null
+      - name: created_month
+        description: Month start date
+        data_tests:
+          - not_null
+      - name: created_year
+        description: Calendar year of created_at
+      - name: created_month_num
+        description: Month number 1–12
+      - name: created_dow
+        description: Day of week (0=Sunday in DuckDB EXTRACT dow)
+      - name: is_weekend
+        description: True when created on Saturday or Sunday
+      - name: agent_start_date
+        description: Assignee employment start (from stg_agents)
+      - name: agent_group
+        description: Assignee team from roster
+      - name: agent_manager
+        description: Assignee manager
+      - name: agent_is_active
+        description: Assignee active flag
+      - name: agent_region
+        description: Assignee region
+      - name: agent_tenure_days
+        description: Days between agent start and ticket created_date
+      - name: is_language_match
+        description: True when ticket language is in assignee language list

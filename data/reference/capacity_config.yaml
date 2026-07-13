@@ -1,0 +1,52 @@
+# Adjustable capacity assumptions — edit here, re-run simulation.
+# Productive hours = ticket-solving time available per agent per shift day
+# (within their 9-hour shift; remainder is meetings, admin, etc.)
+
+shift_duration_hours: 9
+
+# Static unplanned shrinkage (meetings, breaks, unplanned interruptions).
+# Applied once to productive minutes (FIFO budget) and hourly ticket capacity.
+unplanned_shrinkage_pct: 0.05
+
+productive_hours_per_day:
+  Tier 1: 6.25
+  Tier 2: 5.75
+  Enterprise: 5.5
+  Technical Quality: 4.5
+
+# P50 handle time (minutes) — lognormal distribution allows outliers both sides
+solve_time_p50_minutes:
+  Tier 1: 6
+  Tier 2: 12
+  Enterprise: 13
+  Technical Quality: 32
+
+# Spread around P50 (0.35 ≈ tight, 0.55 ≈ heavy tails)
+solve_time_lognormal_sigma: 0.45
+
+# Hard cap on a single ticket handle (minutes)
+solve_time_max_minutes: 240
+
+# First response = work start; small fraction get instant auto-ack before queue
+first_response_auto_ack_pct: 0.08
+first_response_auto_ack_max_minutes: 3
+
+# ---------------------------------------------------------------------------
+# Headcount planning (insights dashboard)
+# ---------------------------------------------------------------------------
+# Weekly inbound is the demand signal: 3-business-day SLA means volume can be
+# worked across the week, so we size HC to clear weekly tickets — not each hour.
+
+# Working days assumed per fully-ramped FTE (Mon–Fri style coverage)
+planning_working_days_per_week: 5
+
+# Fraction of productive ticket capacity to plan against (headroom for spikes,
+# coaching, and variance around P50 handle times). Shrinkage is already applied
+# inside productive_hours_per_day via unplanned_shrinkage_pct.
+planning_target_utilization: 0.85
+
+# Optional solve-rate goal: plan capacity for this share of inbound (1.0 = all)
+planning_solve_goal: 1.0
+
+# SLA context (business days) — documented for planners; used in dashboard copy
+planning_sla_business_days: 3

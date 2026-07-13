@@ -1,0 +1,82 @@
+version: 2
+
+sources:
+  - name: zendesk_raw
+    description: >
+      Synthetic Zendesk-style intake and simulated completion data.
+      Produced by `scripts/generate_tickets.py` + `scripts/run_simulation.py`.
+    schema: main
+    tables:
+      - name: tickets_simulated
+        description: Ticket grain after FIFO assignment/completion (primary staging input).
+        meta:
+          external_location: "data/processed/tickets_simulated.csv"
+        columns:
+          - name: ticket_id
+            description: Unique ticket identifier
+          - name: created_at
+            description: Ticket created timestamp (UTC)
+          - name: support_group
+            description: Routing team
+          - name: priority
+            description: Zendesk-style priority
+          - name: status
+            description: Lifecycle status
+          - name: assignee_id
+            description: Assigned agent id (nullable if unassigned)
+          - name: solved_at
+            description: Completion timestamp when solved
+          - name: first_response_time_hours
+            description: Calendar hours from create to first response
+          - name: resolution_time_hours
+            description: Calendar hours from create to solve
+          - name: satisfaction_rating
+            description: CSAT score 1–5 when surveyed
+          - name: reopen_count
+            description: Number of reopen events
+          - name: category
+            description: Issue category
+          - name: is_enterprise
+            description: Enterprise customer flag
+          - name: customer_tier
+            description: Customer tier label
+          - name: language
+            description: Requester language
+          - name: channel
+            description: Intake channel
+          - name: subject
+            description: Ticket subject
+          - name: description
+            description: Ticket body
+          - name: requester_id
+            description: Requester identifier
+          - name: requester_name
+            description: Requester display name
+          - name: requester_email
+            description: Requester email
+          - name: tags
+            description: Comma-separated tags
+          - name: updated_at
+            description: Last update timestamp
+
+      - name: agents
+        description: Agent dimension snapshot from the roster export.
+        meta:
+          external_location: "data/generated/zendesk_dummy_agents.csv"
+        columns:
+          - name: id
+            description: Agent id (joins to assignee_id)
+          - name: name
+            description: Agent display name
+          - name: group
+            description: Support group / team
+          - name: languages
+            description: Comma-separated language codes
+          - name: start_date
+            description: Employment start date
+          - name: manager
+            description: Manager name
+          - name: active
+            description: Whether the agent is currently active
+          - name: region
+            description: Geographic region for scheduling

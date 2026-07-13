@@ -1,0 +1,19 @@
+# Local DuckDB profile for this project.
+# Copy to ~/.dbt/profiles.yml or set DBT_PROFILES_DIR to this directory.
+#
+#   export DBT_PROFILES_DIR="$(pwd)"
+#   dbt run
+
+support_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "data/processed/support_analytics.duckdb"
+      threads: 4
+      schema: main
+    # CI / ephemeral runs
+    ci:
+      type: duckdb
+      path: ":memory:"
+      threads: 2
