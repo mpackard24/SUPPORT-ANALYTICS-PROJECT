@@ -265,6 +265,28 @@ def apply_theme(*, max_width: int = 1400) -> None:
         .hex-card.purple {{ border-top: 3px solid {PURPLE}; }}
         .hex-card.pink {{ border-top: 3px solid {PINK}; }}
         .hex-card.green {{ border-top: 3px solid {GREEN}; }}
+        .hex-card.cyan {{ border-top: 3px solid {CYAN}; }}
+        .hex-card.amber {{ border-top: 3px solid {AMBER}; }}
+        .hex-card.soft {{ border-top: 3px solid {PURPLE_SOFT}; }}
+        .about-explore-grid {{
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-rows: 1fr 1fr 1fr;
+          gap: 0.85rem;
+          margin: 0.5rem 0 1rem 0;
+        }}
+        .about-explore-grid .hex-card {{
+          margin: 0;
+          height: 100%;
+          min-height: 7.5rem;
+          box-sizing: border-box;
+        }}
+        /* Compact 2×3 explore cards — same footprint as pipeline steps */
+        .about-flow.about-explore .about-flow-step {{
+          flex: 1 1 calc(50% - 0.55rem);
+          min-width: min(100%, 200px);
+          max-width: calc(50% - 0.28rem);
+        }}
         .hex-card h3, .hex-card h4 {{
           color: {TEXT} !important;
           margin: 0.15rem 0 0.4rem 0;
@@ -332,6 +354,146 @@ def apply_theme(*, max_width: int = 1400) -> None:
           line-height: 1.45;
           margin: 0.15rem 0 0.85rem 0;
           max-width: 48rem;
+        }}
+        .about-banner {{
+          background: linear-gradient(135deg, rgba(124,58,237,0.22), rgba(244,114,182,0.10));
+          border: 1px solid {BORDER};
+          border-left: 3px solid {PURPLE};
+          border-radius: 14px;
+          padding: 1rem 1.15rem;
+          margin: 0.35rem 0 1.1rem 0;
+        }}
+        .about-banner strong {{
+          color: {TEXT};
+          font-family: {FONT_DISPLAY};
+        }}
+        .about-banner p {{
+          margin: 0.35rem 0 0 0;
+          color: {TEXT_MUTED};
+          font-size: 0.92rem;
+          line-height: 1.5;
+        }}
+        .about-flow {{
+          display: flex;
+          flex-wrap: wrap;
+          align-items: stretch;
+          gap: 0.55rem;
+          margin: 0.5rem 0 0.85rem 0;
+        }}
+        .about-flow-step {{
+          flex: 1 1 140px;
+          min-width: 140px;
+          background: {SURFACE};
+          border: 1px solid {BORDER};
+          border-radius: 14px;
+          padding: 0.9rem 0.95rem;
+          box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+        }}
+        .about-flow-step .step-num {{
+          font-size: 0.7rem;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          font-weight: 700;
+          margin-bottom: 0.35rem;
+        }}
+        .about-flow-step h4 {{
+          margin: 0 0 0.35rem 0;
+          font-family: {FONT_DISPLAY} !important;
+          color: {TEXT} !important;
+          font-size: 1rem !important;
+          font-weight: 600 !important;
+        }}
+        .about-flow-step p {{
+          margin: 0;
+          color: {TEXT_MUTED};
+          font-size: 0.84rem;
+          line-height: 1.45;
+        }}
+        .about-flow-arrow {{
+          display: flex;
+          align-items: center;
+          color: {TEXT_DIM};
+          font-size: 1.25rem;
+          font-weight: 600;
+          padding: 0 0.1rem;
+          align-self: center;
+        }}
+        .about-flow-step.purple {{ border-top: 3px solid {PURPLE}; }}
+        .about-flow-step.purple .step-num {{ color: {PURPLE_SOFT}; }}
+        .about-flow-step.pink {{ border-top: 3px solid {PINK}; }}
+        .about-flow-step.pink .step-num {{ color: {PINK_SOFT}; }}
+        .about-flow-step.green {{ border-top: 3px solid {GREEN}; }}
+        .about-flow-step.green .step-num {{ color: {GREEN_SOFT}; }}
+        .about-flow-step.cyan {{ border-top: 3px solid {CYAN}; }}
+        .about-flow-step.cyan .step-num {{ color: {CYAN}; }}
+        .about-flow-step.amber {{ border-top: 3px solid {AMBER}; }}
+        .about-flow-step.amber .step-num {{ color: {AMBER}; }}
+        .about-flow-step.soft {{ border-top: 3px solid {PURPLE_SOFT}; }}
+        .about-flow-step.soft .step-num {{ color: {PURPLE_SOFT}; }}
+        .about-link {{
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+          margin-top: 0.35rem;
+          padding: 0.55rem 0.9rem;
+          background: {SURFACE};
+          border: 1px solid {BORDER};
+          border-radius: 10px;
+          color: {PURPLE_SOFT} !important;
+          text-decoration: none !important;
+          font-weight: 600;
+          font-size: 0.9rem;
+        }}
+        .about-link:hover {{
+          border-color: {PURPLE};
+          color: {TEXT} !important;
+        }}
+        .about-filter-grid {{
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 0.65rem;
+          margin-top: 0.75rem;
+        }}
+        .about-filter-stack {{
+          display: flex;
+          flex-direction: column;
+          gap: 0.65rem;
+          margin-top: 0.85rem;
+        }}
+        .about-controls-panel {{
+          height: 100%;
+          min-height: 28rem;
+          box-sizing: border-box;
+        }}
+        .about-controls-footnote {{
+          margin: 1rem 0 0 0 !important;
+          padding-top: 0.75rem;
+          border-top: 1px solid {BORDER};
+          color: {TEXT_DIM} !important;
+          font-size: 0.8rem !important;
+          line-height: 1.45 !important;
+        }}
+        .about-filter-item {{
+          background: {SURFACE_2};
+          border: 1px solid {BORDER};
+          border-radius: 10px;
+          padding: 0.65rem 0.75rem;
+        }}
+        .about-filter-item strong {{
+          display: block;
+          color: {TEXT};
+          font-size: 0.82rem;
+          margin-bottom: 0.25rem;
+        }}
+        .about-filter-item span {{
+          color: {TEXT_MUTED};
+          font-size: 0.78rem;
+          line-height: 1.4;
+        }}
+        @media (max-width: 900px) {{
+          .about-filter-grid {{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }}
         }}
         </style>
         """,

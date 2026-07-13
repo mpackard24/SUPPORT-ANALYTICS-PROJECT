@@ -32,9 +32,13 @@ from theme import (
     ACCENT_DEFLECTION,
     ACCENT_SPECIALIST,
     ACCENT_VOLUME,
-    CYAN,
-    TEAM_COLORS,
     AMBER,
+    CYAN,
+    GREEN,
+    PINK,
+    PURPLE,
+    PURPLE_SOFT,
+    TEAM_COLORS,
     apply_theme,
     filter_bar,
     page_header,
@@ -438,6 +442,7 @@ def render_sidebar(df: pd.DataFrame) -> tuple:
     st.sidebar.divider()
     st.sidebar.markdown("**Demo path**")
     st.sidebar.caption(
+        "Use **About** / **Dashboard** at the top.  \n"
         "1. **Operations** — volume & where work lands  \n"
         "2. **SLA Trends** — 3-business-day attainment  \n"
         "3. **Prioritization** — what Engineering should fix  \n"
@@ -1469,6 +1474,199 @@ def tab_enterprise(df_all_filtered_except_ent: pd.DataFrame) -> None:
     )
 
 
+REPO_URL = "https://github.com/mpackard24/SUPPORT-ANALYTICS-PROJECT"
+
+
+def render_about_landing() -> None:
+    """High-level project landing page for technical and non-technical readers."""
+    st.markdown(
+        """
+        <div class="about-banner">
+          <strong>Alpha demo</strong>
+          <p>
+            This is an early working prototype built with
+            <strong style="color:#F4F7FB">Cursor</strong>
+            to show end-to-end support analytics — from synthetic ticket creation
+            through capacity simulation to an interactive operations dashboard.
+            Expect rough edges: metrics and labels are illustrative, and not every
+            data point has been scrubbed or production-hardened.
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    section("What this project does", first=True)
+    left, right = st.columns(2)
+    with left:
+        st.markdown(
+            """
+            <div class="hex-card purple">
+              <h4>In plain terms</h4>
+              <p>
+                Support teams get more tickets than they can answer at once.
+                This demo creates realistic ticket traffic, simulates how agents
+                would work through that queue, then turns the results into charts
+                leaders can use — volume, SLA risk, what to fix next, and where
+                capacity is tight.
+              </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with right:
+        st.markdown(
+            """
+            <div class="hex-card green">
+              <h4>Under the hood</h4>
+              <p>
+                A Python ticket generator feeds a FIFO solving simulation.
+                <strong style="color:#F4F7FB">dbt + DuckDB</strong> models clean
+                and aggregate the outputs; Streamlit serves the dashboard.
+                “Vibe metrics” here means demo-friendly ops KPIs (CSAT, SLA,
+                priority scores) — directional signals, not audited production KPIs.
+              </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    section(
+        "How the pipeline works",
+        "Four stages from synthetic intake to the views in this app.",
+    )
+    st.markdown(
+        """
+        <div class="about-flow">
+          <div class="about-flow-step purple">
+            <div class="step-num">01 · Generate</div>
+            <h4>Ticket generator</h4>
+            <p>
+              Builds Zendesk-style intake: priorities, teams, channels, enterprise
+              flags, and agent roster context — fully synthetic for the demo.
+            </p>
+          </div>
+          <div class="about-flow-arrow">→</div>
+          <div class="about-flow-step pink">
+            <div class="step-num">02 · Simulate</div>
+            <h4>Solving simulation</h4>
+            <p>
+              FIFO capacity simulation assigns and resolves work against staffing
+              schedules so backlog, wait, and load behave like a real queue.
+            </p>
+          </div>
+          <div class="about-flow-arrow">→</div>
+          <div class="about-flow-step green">
+            <div class="step-num">03 · Transform</div>
+            <h4>dbt + DuckDB</h4>
+            <p>
+              Staging → intermediate metrics → marts. Business-hours SLA logic and
+              Parquet exports power the Streamlit layer.
+            </p>
+          </div>
+          <div class="about-flow-arrow">→</div>
+          <div class="about-flow-step cyan">
+            <div class="step-num">04 · Explore</div>
+            <h4>Dashboard &amp; vibe metrics</h4>
+            <p>
+              Operations, SLA trends, issue prioritization, capacity, and an
+              enterprise lens — interactive filters over the modeled outputs.
+            </p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    section(
+        "What you can explore in the dashboard",
+        "Switch to Dashboard above, then use the tabs.",
+    )
+
+    def _explore_card(accent: str, title: str, body: str) -> str:
+        return f"""
+        <div class="about-flow-step" style="border-top:3px solid {accent};margin:0 0 0.55rem 0;box-sizing:border-box">
+          <div class="step-num" style="color:{accent}">Dashboard</div>
+          <h4>{title}</h4>
+          <p>{body}</p>
+        </div>
+        """
+
+    explore_cards = [
+        (PURPLE, "Support Operations", "Headline volume, team mix, and where work lands."),
+        (PINK, "SLA Trends", "Business-hours first-response and resolution attainment."),
+        (GREEN, "Issue Prioritization", "Category scores that surface what Engineering should tackle."),
+        (CYAN, "Capacity &amp; Team", "Agent load, resolution patterns, and long-tail risk."),
+        (AMBER, "Enterprise View", "Strategic-account segment: volume, quality, and top issues."),
+    ]
+
+    left, right = st.columns([1, 1], gap="medium")
+    with left:
+        for accent, title, body in explore_cards:
+            st.markdown(_explore_card(accent, title, body), unsafe_allow_html=True)
+
+    with right:
+        st.markdown(
+            f"""
+            <div class="about-flow-step about-controls-panel" style="border-top:3px solid {PURPLE_SOFT}">
+              <div class="step-num" style="color:{PURPLE_SOFT}">Controls</div>
+              <h4>Sidebar filters</h4>
+              <p>
+                On the Dashboard view, the left sidebar scopes every chart the same way
+                so tabs stay comparable. Change a control once — Operations, SLA,
+                Prioritization, Capacity, and Enterprise all update together.
+              </p>
+              <div class="about-filter-stack">
+                <div class="about-filter-item">
+                  <strong>Date range</strong>
+                  <span>Limits tickets by created date for the period you want to inspect. Use it to zoom into a spike week or compare quarters.</span>
+                </div>
+                <div class="about-filter-item">
+                  <strong>Support groups</strong>
+                  <span>Tier 1, Tier 2, Enterprise, and Technical Quality — include any mix to see how work is distributed across teams.</span>
+                </div>
+                <div class="about-filter-item">
+                  <strong>Priority</strong>
+                  <span>Low through urgent. Isolate high-severity queues when you want to stress-test SLA and capacity views.</span>
+                </div>
+                <div class="about-filter-item">
+                  <strong>Enterprise toggle</strong>
+                  <span>Focus on strategic-account tickets without rebuilding filters on every tab. Enterprise View always uses the Enterprise segment.</span>
+                </div>
+              </div>
+              <p class="about-controls-footnote">
+                Tip: start broad on Support Operations, then tighten filters as you move into SLA and Prioritization.
+              </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    section("Read this before treating numbers as truth")
+    st.markdown(
+        """
+        - **Synthetic data** — tickets, agents, and outcomes are generated for the demo, not pulled from a live Zendesk instance.
+        - **Not fully scrubbed** — field names, categories, and metric definitions may still look unfinished or inconsistent; treat everything as illustrative.
+        - **Alpha scope** — the goal was a working Cursor-built path (generate → simulate → model → app), not a finished product analytics suite.
+        - **Vibe metrics** — CSAT, SLA flags, and priority scores are demo signals meant to feel operationally useful, not certified KPIs.
+        """
+    )
+
+    section("Source code")
+    st.markdown(
+        f"""
+        <p class="tab-lead" style="margin-bottom:0.5rem">
+          Pipeline scripts, dbt models, and this Streamlit app live in the public repo.
+        </p>
+        <a class="about-link" href="{REPO_URL}" target="_blank" rel="noopener noreferrer">
+          View on GitHub → mpackard24/SUPPORT-ANALYTICS-PROJECT
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption(REPO_URL)
+
+
 # ---------------------------------------------------------------------------
 # App entrypoint
 # ---------------------------------------------------------------------------
@@ -1485,6 +1683,21 @@ def main() -> None:
         "Support Analytics",
         "Synthetic Zendesk data · FIFO capacity simulation · dbt + DuckDB models",
     )
+
+    view = st.radio(
+        "App section",
+        options=["About", "Dashboard"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="app_section",
+    )
+
+    if view == "About":
+        render_about_landing()
+        st.sidebar.markdown("**About**")
+        st.sidebar.caption("Alpha demo · synthetic pipeline · Cursor prototype")
+        st.sidebar.markdown(f"[GitHub repository]({REPO_URL})")
+        return
 
     data_version = processed_data_version()
     tickets = load_tickets(data_version)
