@@ -183,8 +183,54 @@ def apply_theme(*, max_width: int = 1400) -> None:
           font-weight: 700 !important;
         }}
         div[data-testid="stMetric"] [data-testid="stMetricDelta"] {{
+          font-weight: 600;
+        }}
+        /* Let Streamlit paint positive/negative deltas; reinforce for dark theme */
+        div[data-testid="stMetric"] [data-testid="stMetricDelta"] svg[data-testid="stMetricDeltaIcon-Up"] ~ div,
+        div[data-testid="stMetric"] [data-testid="stMetricDelta"] [style*="color: rgb(9, 171"] {{
           color: {GREEN} !important;
         }}
+        div[data-testid="stMetric"] [data-testid="stMetricDelta"] svg[data-testid="stMetricDeltaIcon-Down"] ~ div,
+        div[data-testid="stMetric"] [data-testid="stMetricDelta"] [style*="color: rgb(255, 43"] {{
+          color: {PINK} !important;
+        }}
+        .kpi-dual {{
+          background: {SURFACE};
+          border: 1px solid {BORDER};
+          border-top: 3px solid {PURPLE};
+          border-radius: 14px;
+          padding: 12px 14px;
+          margin: 0 0 0.65rem 0;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+          min-height: 7.75rem;
+          box-sizing: border-box;
+        }}
+        .kpi-dual-label {{
+          color: {TEXT_MUTED};
+          font-size: 0.72rem;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          font-weight: 600;
+          margin-bottom: 0.25rem;
+        }}
+        .kpi-dual-value {{
+          color: {TEXT};
+          font-family: {FONT_DISPLAY};
+          font-size: 1.55rem;
+          font-weight: 700;
+          line-height: 1.15;
+          margin-bottom: 0.45rem;
+        }}
+        .kpi-dual-line {{
+          font-size: 0.78rem;
+          font-weight: 600;
+          line-height: 1.35;
+          margin-top: 0.15rem;
+        }}
+        .kpi-dual-line.good {{ color: {GREEN}; }}
+        .kpi-dual-line.bad {{ color: {PINK}; }}
+        .kpi-dual-line.flat {{ color: {AMBER}; }}
+        .kpi-dual-line.muted {{ color: {TEXT_DIM}; }}
         .stTabs [data-baseweb="tab-list"] {{
           gap: 8px;
           border-bottom: 1px solid {BORDER};

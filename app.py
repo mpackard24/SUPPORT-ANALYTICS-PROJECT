@@ -34,12 +34,18 @@ from theme import (
     ACCENT_SPECIALIST,
     ACCENT_VOLUME,
     AMBER,
+    BORDER,
     CYAN,
+    FONT_DISPLAY,
     GREEN,
     PINK,
     PURPLE,
     PURPLE_SOFT,
+    SURFACE,
     TEAM_COLORS,
+    TEXT,
+    TEXT_DIM,
+    TEXT_MUTED,
     apply_theme,
     filter_bar,
     page_header,
@@ -493,13 +499,563 @@ Synthetic Zendesk-style tickets → FIFO simulation → **dbt + DuckDB** models 
     return start_date, end_date, groups, priorities, enterprise_only
 
 
-def render_kpi_row(kpis: dict) -> None:
+CSAT_GOAL = 4.0
+SLA_GOAL = 0.99  # 99.0%
+
+
+def sla_snapshot_metrics(df: pd.DataFrame) -> dict:
+    """KPI block plus business-hours speeds and breach counts."""
+    base = kpi_block(df)
+    if df.empty:
+        return {
+            **base,
+            "avg_fr_bh": None,
+            "avg_res_bh": None,
+            "fr_breaches": 0,
+            "res_breaches": 0,
+        }
+
+    fr_elig = df["is_fr_sla_eligible"].fillna(False).astype(bool)
+    res_elig = df["is_res_sla_eligible"].fillna(False).astype(bool)
+    fr_met = df["met_first_response_sla"].fillna(False).astype(bool)
+    res_met = df["met_resolution_sla"].fillna(False).astype(bool)
+    return {
+        **base,
+        "avg_fr_bh": float(df["first_response_business_hours"].mean())
+        if "first_response_business_hours" in df.columns
+        else None,
+        "avg_res_bh": float(df["resolution_business_hours"].mean())
+        if "resolution_business_hours" in df.columns
+        else None,
+        "fr_breaches": int((fr_elig & ~fr_met).sum()),
+        "res_breaches": int((res_elig & ~res_met).sum()),
+    }
+
+
+def period_starts(df: pd.DataFrame, grain: str) -> list:
+    if df.empty:
+        return []
+    periods = period_bucket(df["created_date"], grain).dropna().unique()
+    return sorted(pd.to_datetime(periods))
+
+
+def tickets_in_period(df: pd.DataFrame, grain: str, period_start) -> pd.DataFrame:
+    work = df.copy()
+    work["_period"] = period_bucket(work["created_date"], grain)
+    target = pd.Timestamp(period_start)
+    return work.loc[work["_period"] == target].drop(columns=["_period"])
+
+
+def format_period_label(period_ts, grain: str) -> str:
+    ts = pd.Timestamp(period_ts)
+    if grain == "Daily":
+        return ts.strftime("%b %d, %Y")
+    if grain == "Weekly":
+        return f"Week of {ts.strftime('%b %d, %Y')}"
+    if grain == "Monthly":
+        return ts.strftime("%b %Y")
+    if grain == "Quarterly":
+        return f"Q{((ts.month - 1) // 3) + 1} {ts.year}"
+    return str(ts.year)
+
+
+def goal_delta_label(value: float | None, goal: float, *, as_pct: bool = False) -> str | None:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None
+    diff = value - goal
+    if as_pct:
+        if abs(diff) < 5e-4:
+            return f"● At {goal:.0%} goal"
+        return f"{diff * 100:+.1f} pp vs {goal:.0%} goal"
+    if abs(diff) < 0.005:
+        return f"● At {goal:.1f} goal"
+    return f"{diff:+.2f} vs {goal:.1f} goal"
+
+
+def period_delta_label(
+    current: float | None,
+    prior: float | None,
+    *,
+    as_pct: bool = False,
+    as_hours: bool = False,
+    as_int: bool = False,
+) -> str | None:
+    if current is None or prior is None:
+        return None
+    if isinstance(current, float) and np.isnan(current):
+        return None
+    if isinstance(prior, float) and np.isnan(prior):
+        return None
+    diff = current - prior
+    if as_pct:
+        if abs(diff) < 5e-4:
+            return "● 0 pp"
+        return f"{diff * 100:+.1f} pp"
+    if as_hours:
+        if abs(diff) < 0.05:
+            return "● 0.0h"
+        return f"{diff:+.1f}h"
+    if as_int:
+        if abs(diff) < 0.5:
+            return "● 0"
+        return f"{diff:+,.0f}"
+    if abs(diff) < 0.005:
+        return "● 0.00"
+    return f"{diff:+.2f}"
+
+
+GRAIN_CHANGE_LABEL = {
+    "Daily": "DoD",
+    "Weekly": "WoW",
+    "Monthly": "MoM",
+    "Quarterly": "QoQ",
+    "Yearly": "YoY",
+}
+
+
+def period_change_detail(
+    current: float | None,
+    prior: float | None,
+    *,
+    grain: str,
+    higher_is_better: bool = True,
+    as_pct: bool = False,
+    as_hours: bool = False,
+    as_int: bool = False,
+) -> tuple[str | None, str]:
+    """Return (label, tone) for period-over-period change. tone: good|bad|flat|muted."""
+    tag = GRAIN_CHANGE_LABEL.get(grain, grain)
+    if current is None or prior is None:
+        return None, "muted"
+    if isinstance(current, float) and np.isnan(current):
+        return None, "muted"
+    if isinstance(prior, float) and np.isnan(prior):
+        return None, "muted"
+
+    diff = float(current) - float(prior)
+    if as_pct:
+        flat = abs(diff) < 5e-4  # < 0.05 pp
+        magnitude = f"{diff * 100:+.1f} pp"
+    elif as_hours:
+        flat = abs(diff) < 0.05
+        magnitude = f"{diff:+.1f}h"
+    elif as_int:
+        flat = abs(diff) < 0.5
+        magnitude = f"{diff:+,.0f}"
+    else:
+        flat = abs(diff) < 0.005
+        magnitude = f"{diff:+.2f}"
+
+    if flat:
+        return f"● 0 {tag}", "flat"
+
+    icon = "▲" if diff > 0 else "▼"
+    improved = (diff > 0) if higher_is_better else (diff < 0)
+    return f"{icon} {magnitude} {tag}", "good" if improved else "bad"
+
+
+def goal_status_detail(
+    value: float | None,
+    goal: float,
+    *,
+    as_pct: bool = False,
+) -> tuple[str | None, str]:
+    """Return (label, tone) for goal comparison."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return None, "muted"
+    meets = value >= goal
+    if as_pct:
+        detail = f"{(value - goal) * 100:+.1f} pp vs {goal:.0%} goal"
+    else:
+        detail = f"{value - goal:+.2f} vs {goal:.1f} goal"
+    if meets:
+        return f"✓ At/above goal ({detail})", "good"
+    return f"✗ Below goal ({detail})", "bad"
+
+
+def render_dual_metric_card(
+    container,
+    label: str,
+    value_str: str,
+    *,
+    grain: str,
+    current: float | None = None,
+    prior: float | None = None,
+    higher_is_better: bool = True,
+    as_pct: bool = False,
+    as_hours: bool = False,
+    as_int: bool = False,
+    goal: float | None = None,
+    goal_as_pct: bool = False,
+) -> None:
+    """Period card with optional goal line + WoW/MoM (etc.) change, including flat icon."""
+    tone_color = {
+        "good": GREEN,
+        "bad": PINK,
+        "flat": AMBER,
+        "muted": TEXT_DIM,
+    }
+    lines: list[str] = []
+    if goal is not None:
+        goal_text, goal_tone = goal_status_detail(current, goal, as_pct=goal_as_pct)
+        if goal_text:
+            lines.append(
+                f'<div style="font-size:0.78rem;font-weight:600;line-height:1.35;'
+                f'margin-top:0.15rem;color:{tone_color[goal_tone]}">{goal_text}</div>'
+            )
+
+    change_text, change_tone = period_change_detail(
+        current,
+        prior,
+        grain=grain,
+        higher_is_better=higher_is_better,
+        as_pct=as_pct,
+        as_hours=as_hours,
+        as_int=as_int,
+    )
+    if change_text:
+        lines.append(
+            f'<div style="font-size:0.78rem;font-weight:600;line-height:1.35;'
+            f'margin-top:0.15rem;color:{tone_color[change_tone]}">{change_text}</div>'
+        )
+    elif prior is None:
+        lines.append(
+            f'<div style="font-size:0.78rem;font-weight:600;line-height:1.35;'
+            f'margin-top:0.15rem;color:{TEXT_DIM}">No prior period</div>'
+        )
+
+    container.markdown(
+        f"""
+        <div style="
+          background:{SURFACE};
+          border:1px solid {BORDER};
+          border-top:3px solid {PURPLE};
+          border-radius:14px;
+          padding:12px 14px;
+          margin:0 0 0.65rem 0;
+          box-shadow:0 10px 30px rgba(0,0,0,0.25);
+          min-height:7.75rem;
+          box-sizing:border-box;
+        ">
+          <div style="
+            color:{TEXT_MUTED};
+            font-size:0.72rem;
+            letter-spacing:0.04em;
+            text-transform:uppercase;
+            font-weight:600;
+            margin-bottom:0.25rem;
+          ">{label}</div>
+          <div style="
+            color:{TEXT};
+            font-family:{FONT_DISPLAY};
+            font-size:1.55rem;
+            font-weight:700;
+            line-height:1.15;
+            margin-bottom:0.45rem;
+          ">{value_str}</div>
+          {''.join(lines)}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_metric(
+    container,
+    label: str,
+    value_str: str,
+    *,
+    delta: str | None = None,
+    higher_is_better: bool = True,
+    help_text: str | None = None,
+) -> None:
+    """st.metric wrapper — green/red deltas (normal = up good, inverse = up bad)."""
+    kwargs: dict = {"label": label, "value": value_str}
+    if help_text:
+        kwargs["help"] = help_text
+    if delta:
+        # Exact match to goal / zero change → flat amber treatment via off + label icon
+        if delta.startswith("●") or " 0 " in f" {delta} ":
+            kwargs["delta"] = delta
+            kwargs["delta_color"] = "off"
+        else:
+            kwargs["delta"] = delta
+            kwargs["delta_color"] = "normal" if higher_is_better else "inverse"
+    else:
+        kwargs["delta_color"] = "off"
+    container.metric(**kwargs)
+
+
+def render_kpi_row(kpis: dict, *, vs_goal: bool = True) -> None:
+    """Full-period headline KPIs; CSAT uses the 4.0 goal when vs_goal=True."""
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Total Tickets", f"{kpis['total']:,}")
-    c2.metric("% Solved", fmt_pct(kpis["pct_solved"]))
-    c3.metric("Avg First Response", fmt_hours(kpis["avg_frt"]))
-    c4.metric("Avg Resolution", fmt_hours(kpis["avg_res"]))
-    c5.metric("Avg CSAT", f"{kpis['avg_csat']:.2f}" if kpis["avg_csat"] else "—")
+    render_metric(c1, "Total Tickets", f"{kpis['total']:,}")
+    render_metric(c2, "% Solved", fmt_pct(kpis["pct_solved"]))
+    render_metric(c3, "Avg First Response", fmt_hours(kpis["avg_frt"]))
+    render_metric(c4, "Avg Resolution", fmt_hours(kpis["avg_res"]))
+    csat_delta = (
+        goal_delta_label(kpis["avg_csat"], CSAT_GOAL) if vs_goal else None
+    )
+    render_metric(
+        c5,
+        "Avg CSAT",
+        f"{kpis['avg_csat']:.2f}" if kpis["avg_csat"] is not None else "—",
+        delta=csat_delta,
+        higher_is_better=True,
+        help_text=f"Goal ≥ {CSAT_GOAL:.1f}" if vs_goal else None,
+    )
+
+
+def render_sla_goal_row(kpis: dict, *, vs_goal: bool = True) -> None:
+    """FR / Resolution SLA cards with 99% goal comparison."""
+    s1, s2 = st.columns(2)
+    fr_delta = (
+        goal_delta_label(kpis["pct_fr_sla"], SLA_GOAL, as_pct=True) if vs_goal else None
+    )
+    res_delta = (
+        goal_delta_label(kpis["pct_res_sla"], SLA_GOAL, as_pct=True) if vs_goal else None
+    )
+    render_metric(
+        s1,
+        "First Response SLA",
+        fmt_pct(kpis["pct_fr_sla"]),
+        delta=fr_delta,
+        higher_is_better=True,
+        help_text=f"Goal ≥ {SLA_GOAL:.0%} · within 3 business days (Mon–Fri 9–5 PT)",
+    )
+    render_metric(
+        s2,
+        "Resolution SLA",
+        fmt_pct(kpis["pct_res_sla"]),
+        delta=res_delta,
+        higher_is_better=True,
+        help_text=f"Goal ≥ {SLA_GOAL:.0%} · within 3 business days (Mon–Fri 9–5 PT)",
+    )
+
+
+def render_sla_snapshot_row(metrics: dict, *, vs_goal: bool = True) -> None:
+    """Full-period SLA snapshot; SLA % cards compare to the 99% goal."""
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    render_metric(
+        m1,
+        "First response SLA",
+        fmt_pct(metrics["pct_fr_sla"]),
+        delta=goal_delta_label(metrics["pct_fr_sla"], SLA_GOAL, as_pct=True)
+        if vs_goal
+        else None,
+        help_text=f"Goal ≥ {SLA_GOAL:.0%}",
+    )
+    render_metric(
+        m2,
+        "Resolution SLA",
+        fmt_pct(metrics["pct_res_sla"]),
+        delta=goal_delta_label(metrics["pct_res_sla"], SLA_GOAL, as_pct=True)
+        if vs_goal
+        else None,
+        help_text=f"Goal ≥ {SLA_GOAL:.0%}",
+    )
+    render_metric(m3, "Avg FR (business h)", fmt_hours(metrics["avg_fr_bh"]))
+    render_metric(m4, "Avg resolution (business h)", fmt_hours(metrics["avg_res_bh"]))
+    render_metric(m5, "FR breaches", f"{metrics['fr_breaches']:,}")
+    render_metric(m6, "Resolution breaches", f"{metrics['res_breaches']:,}")
+
+
+def render_period_kpi_cards(
+    current: dict,
+    prior: dict | None,
+    *,
+    grain: str,
+    current_label: str,
+    prior_label: str | None,
+) -> None:
+    """Latest-grain KPI + SLA cards with goal status and WoW/MoM change."""
+    tag = GRAIN_CHANGE_LABEL.get(grain, grain)
+    caption = f"Latest {grain.lower()}: **{current_label}**"
+    if prior_label:
+        caption += f" · vs prior **{prior_label}** ({tag})"
+    section(f"Latest {grain.lower()} KPIs", caption)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    p = prior or {}
+    render_dual_metric_card(
+        c1,
+        "Total Tickets",
+        f"{current['total']:,}",
+        grain=grain,
+        current=float(current["total"]),
+        prior=float(p["total"]) if prior is not None else None,
+        as_int=True,
+        higher_is_better=True,
+    )
+    render_dual_metric_card(
+        c2,
+        "% Solved",
+        fmt_pct(current["pct_solved"]),
+        grain=grain,
+        current=current["pct_solved"],
+        prior=p.get("pct_solved"),
+        as_pct=True,
+        higher_is_better=True,
+    )
+    render_dual_metric_card(
+        c3,
+        "Avg First Response",
+        fmt_hours(current["avg_frt"]),
+        grain=grain,
+        current=current["avg_frt"],
+        prior=p.get("avg_frt"),
+        as_hours=True,
+        higher_is_better=False,
+    )
+    render_dual_metric_card(
+        c4,
+        "Avg Resolution",
+        fmt_hours(current["avg_res"]),
+        grain=grain,
+        current=current["avg_res"],
+        prior=p.get("avg_res"),
+        as_hours=True,
+        higher_is_better=False,
+    )
+    render_dual_metric_card(
+        c5,
+        "Avg CSAT",
+        f"{current['avg_csat']:.2f}" if current["avg_csat"] is not None else "—",
+        grain=grain,
+        current=current["avg_csat"],
+        prior=p.get("avg_csat"),
+        higher_is_better=True,
+        goal=CSAT_GOAL,
+    )
+
+    s1, s2 = st.columns(2)
+    render_dual_metric_card(
+        s1,
+        "First Response SLA",
+        fmt_pct(current["pct_fr_sla"]),
+        grain=grain,
+        current=current["pct_fr_sla"],
+        prior=p.get("pct_fr_sla"),
+        as_pct=True,
+        higher_is_better=True,
+        goal=SLA_GOAL,
+        goal_as_pct=True,
+    )
+    render_dual_metric_card(
+        s2,
+        "Resolution SLA",
+        fmt_pct(current["pct_res_sla"]),
+        grain=grain,
+        current=current["pct_res_sla"],
+        prior=p.get("pct_res_sla"),
+        as_pct=True,
+        higher_is_better=True,
+        goal=SLA_GOAL,
+        goal_as_pct=True,
+    )
+
+
+def render_period_sla_snapshot_cards(
+    current: dict,
+    prior: dict | None,
+    *,
+    grain: str,
+    current_label: str,
+    prior_label: str | None,
+) -> None:
+    """Latest-grain SLA snapshot with goal status and WoW/MoM change."""
+    tag = GRAIN_CHANGE_LABEL.get(grain, grain)
+    caption = f"Latest {grain.lower()}: **{current_label}**"
+    if prior_label:
+        caption += f" · vs prior **{prior_label}** ({tag})"
+    section(f"Latest {grain.lower()} SLA snapshot", caption)
+
+    p = prior or {}
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    render_dual_metric_card(
+        m1,
+        "First response SLA",
+        fmt_pct(current["pct_fr_sla"]),
+        grain=grain,
+        current=current["pct_fr_sla"],
+        prior=p.get("pct_fr_sla"),
+        as_pct=True,
+        higher_is_better=True,
+        goal=SLA_GOAL,
+        goal_as_pct=True,
+    )
+    render_dual_metric_card(
+        m2,
+        "Resolution SLA",
+        fmt_pct(current["pct_res_sla"]),
+        grain=grain,
+        current=current["pct_res_sla"],
+        prior=p.get("pct_res_sla"),
+        as_pct=True,
+        higher_is_better=True,
+        goal=SLA_GOAL,
+        goal_as_pct=True,
+    )
+    render_dual_metric_card(
+        m3,
+        "Avg FR (business h)",
+        fmt_hours(current["avg_fr_bh"]),
+        grain=grain,
+        current=current["avg_fr_bh"],
+        prior=p.get("avg_fr_bh"),
+        as_hours=True,
+        higher_is_better=False,
+    )
+    render_dual_metric_card(
+        m4,
+        "Avg resolution (business h)",
+        fmt_hours(current["avg_res_bh"]),
+        grain=grain,
+        current=current["avg_res_bh"],
+        prior=p.get("avg_res_bh"),
+        as_hours=True,
+        higher_is_better=False,
+    )
+    render_dual_metric_card(
+        m5,
+        "FR breaches",
+        f"{current['fr_breaches']:,}",
+        grain=grain,
+        current=float(current["fr_breaches"]),
+        prior=float(p["fr_breaches"]) if prior is not None else None,
+        as_int=True,
+        higher_is_better=False,
+    )
+    render_dual_metric_card(
+        m6,
+        "Resolution breaches",
+        f"{current['res_breaches']:,}",
+        grain=grain,
+        current=float(current["res_breaches"]),
+        prior=float(p["res_breaches"]) if prior is not None else None,
+        as_int=True,
+        higher_is_better=False,
+    )
+
+
+def latest_period_metrics(
+    df: pd.DataFrame, grain: str, *, snapshot: bool = False
+) -> tuple[dict | None, dict | None, str | None, str | None]:
+    """Return (current_metrics, prior_metrics, current_label, prior_label)."""
+    periods = period_starts(df, grain)
+    if not periods:
+        return None, None, None, None
+    current_p = periods[-1]
+    prior_p = periods[-2] if len(periods) > 1 else None
+    builder = sla_snapshot_metrics if snapshot else kpi_block
+    current = builder(tickets_in_period(df, grain, current_p))
+    prior = builder(tickets_in_period(df, grain, prior_p)) if prior_p is not None else None
+    return (
+        current,
+        prior,
+        format_period_label(current_p, grain),
+        format_period_label(prior_p, grain) if prior_p is not None else None,
+    )
 
 
 DEFAULT_TREND_GRAIN = "Weekly"
@@ -555,26 +1111,29 @@ def tab_operations(df: pd.DataFrame) -> None:
     )
 
     kpis = kpi_block(df)
-    section("Headline KPIs", "Filtered period · calendar hours unless noted", first=True)
+    section(
+        "Headline KPIs",
+        f"Filtered period · CSAT goal ≥ {CSAT_GOAL:.1f} · SLA goals ≥ {SLA_GOAL:.0%}",
+        first=True,
+    )
     render_kpi_row(kpis)
-
-    sla1, sla2 = st.columns(2)
-    sla1.metric(
-        "First Response SLA",
-        fmt_pct(kpis["pct_fr_sla"]),
-        help="Within 3 business days (Mon–Fri 9–5 PT)",
-    )
-    sla2.metric(
-        "Resolution SLA",
-        fmt_pct(kpis["pct_res_sla"]),
-        help="Within 3 business days (Mon–Fri 9–5 PT)",
-    )
+    render_sla_goal_row(kpis)
 
     if df.empty:
         st.info("No tickets match the current filters.")
         return
 
     grain = render_trend_controls(widget_key="ops_trend_grain")
+    cur, prior, cur_label, prior_label = latest_period_metrics(df, grain)
+    if cur is not None and cur_label is not None:
+        render_period_kpi_cards(
+            cur,
+            prior,
+            grain=grain,
+            current_label=cur_label,
+            prior_label=prior_label,
+        )
+
     section(
         "Ticket volume",
         "Title and rolling average update with the shared trend grain.",
@@ -628,17 +1187,36 @@ def tab_operations(df: pd.DataFrame) -> None:
     )
 
     with left:
-        fig_grp = px.bar(
+        total_tickets = int(by_group["tickets"].sum())
+        fig_grp = px.pie(
             by_group,
-            x="support_group",
-            y="tickets",
+            names="support_group",
+            values="tickets",
             color="support_group",
             color_discrete_map=GROUP_COLORS,
             title="Ticket volume by support group",
-            labels={"tickets": "Tickets", "support_group": "Group"},
         )
-        fig_grp.update_layout(showlegend=False)
-        st.plotly_chart(style_fig(fig_grp, 340), width="stretch")
+        fig_grp.update_traces(
+            textposition="outside",
+            texttemplate="%{label}<br>%{percent:.1%}<br>%{value:,}",
+            textfont=dict(size=13, color=TEXT),
+            hovertemplate=(
+                "%{label}<br>%{value:,} tickets"
+                f" ({total_tickets:,} total)"
+                "<br>%{percent:.1%}<extra></extra>"
+            ),
+            hole=0.42,
+            pull=[0.02] * len(by_group),
+            marker=dict(line=dict(color=SURFACE, width=2)),
+        )
+        fig_grp.update_layout(
+            showlegend=False,
+            margin=dict(l=20, r=20, t=72, b=20),
+            uniformtext_minsize=12,
+            uniformtext_mode="hide",
+        )
+        st.plotly_chart(style_fig(fig_grp, 420), width="stretch")
+        st.caption(f"Share of **{total_tickets:,}** tickets in the current filter.")
 
     with right:
         heat = (
@@ -698,24 +1276,27 @@ def tab_sla_trends(df: pd.DataFrame) -> None:
         st.info("No tickets match the current filters.")
         return
 
-    kpis = kpi_block(df)
-    fr_elig = int(df["is_fr_sla_eligible"].fillna(False).astype(bool).sum())
-    res_elig = int(df["is_res_sla_eligible"].fillna(False).astype(bool).sum())
-    fr_met = int(df["met_first_response_sla"].fillna(False).astype(bool).sum())
-    res_met = int(df["met_resolution_sla"].fillna(False).astype(bool).sum())
-    avg_fr_bh = float(df["first_response_business_hours"].mean()) if "first_response_business_hours" in df else None
-    avg_res_bh = float(df["resolution_business_hours"].mean()) if "resolution_business_hours" in df else None
-
-    section("SLA snapshot", "Business-hours metrics for the filtered ticket set.", first=True)
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric("First response SLA", fmt_pct(kpis["pct_fr_sla"]))
-    m2.metric("Resolution SLA", fmt_pct(kpis["pct_res_sla"]))
-    m3.metric("Avg FR (business h)", fmt_hours(avg_fr_bh))
-    m4.metric("Avg resolution (business h)", fmt_hours(avg_res_bh))
-    m5.metric("FR breaches", f"{fr_elig - fr_met:,}")
-    m6.metric("Resolution breaches", f"{res_elig - res_met:,}")
+    metrics = sla_snapshot_metrics(df)
+    section(
+        "SLA snapshot",
+        f"Filtered period · SLA goals ≥ {SLA_GOAL:.0%}",
+        first=True,
+    )
+    render_sla_snapshot_row(metrics)
 
     grain = render_trend_controls(widget_key="sla_trend_grain")
+    cur, prior, cur_label, prior_label = latest_period_metrics(
+        df, grain, snapshot=True
+    )
+    if cur is not None and cur_label is not None:
+        render_period_sla_snapshot_cards(
+            cur,
+            prior,
+            grain=grain,
+            current_label=cur_label,
+            prior_label=prior_label,
+        )
+
     series = sla_period_series(df, grain=grain)
     if series.empty:
         st.info("No SLA-eligible tickets in this period.")
@@ -785,10 +1366,10 @@ def tab_sla_trends(df: pd.DataFrame) -> None:
         att_title = f"SLA attainment over time ({grain.lower()}) — resolution time"
 
     fig_att.add_hline(
-        y=1.0,
+        y=SLA_GOAL,
         line_dash="dot",
         line_color="#94A3B8",
-        annotation_text="100% target",
+        annotation_text=f"{SLA_GOAL:.0%} goal",
         annotation_position="top left",
         secondary_y=False,
     )
@@ -1403,15 +1984,26 @@ def tab_enterprise(df_all_filtered_except_ent: pd.DataFrame) -> None:
         )
         return
 
-    section("Enterprise KPIs", first=True)
+    section(
+        "Enterprise KPIs",
+        f"CSAT goal ≥ {CSAT_GOAL:.1f} · SLA goals ≥ {SLA_GOAL:.0%}",
+        first=True,
+    )
     kpis = kpi_block(ent)
     render_kpi_row(kpis)
-
-    e1, e2 = st.columns(2)
-    e1.metric("First Response SLA", fmt_pct(kpis["pct_fr_sla"]))
-    e2.metric("Resolution SLA", fmt_pct(kpis["pct_res_sla"]))
+    render_sla_goal_row(kpis)
 
     grain = render_trend_controls(widget_key="ent_trend_grain")
+    cur, prior, cur_label, prior_label = latest_period_metrics(ent, grain)
+    if cur is not None and cur_label is not None:
+        render_period_kpi_cards(
+            cur,
+            prior,
+            grain=grain,
+            current_label=cur_label,
+            prior_label=prior_label,
+        )
+
     vol_cfg = VOLUME_GRAIN_CONFIG[grain]
     section(
         "Volume & quality trends",
@@ -1466,6 +2058,13 @@ def tab_enterprise(df_all_filtered_except_ent: pd.DataFrame) -> None:
             title=f"Enterprise CSAT trend ({grain.lower()})",
             yaxis=dict(range=[1, 5]),
         )
+        fig_csat.add_hline(
+            y=CSAT_GOAL,
+            line_dash="dot",
+            line_color="#94A3B8",
+            annotation_text=f"{CSAT_GOAL:.1f} goal",
+            annotation_position="top left",
+        )
         st.plotly_chart(style_fig(fig_csat, 320), width="stretch")
 
     with right:
@@ -1491,6 +2090,13 @@ def tab_enterprise(df_all_filtered_except_ent: pd.DataFrame) -> None:
             title=f"Enterprise SLA attainment ({grain.lower()})",
             yaxis_tickformat=".0%",
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        fig_sla.add_hline(
+            y=SLA_GOAL,
+            line_dash="dot",
+            line_color="#94A3B8",
+            annotation_text=f"{SLA_GOAL:.0%} goal",
+            annotation_position="top left",
         )
         st.plotly_chart(style_fig(fig_sla, 320), width="stretch")
 
