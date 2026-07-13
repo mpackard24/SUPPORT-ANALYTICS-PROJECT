@@ -11,6 +11,7 @@ Run from project root (after `python scripts/run_pipeline.py --generate`):
 from __future__ import annotations
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -404,23 +405,46 @@ def style_fig(fig: go.Figure, height: int = 360) -> go.Figure:
 # ---------------------------------------------------------------------------
 # Page sections
 # ---------------------------------------------------------------------------
+def most_recent_completed_saturday(today: date | None = None) -> date:
+    """Latest Saturday whose calendar day has fully ended (before today if today is Saturday)."""
+    today = today or date.today()
+    days_since_sat = (today.weekday() - 5) % 7
+    last_sat = today - timedelta(days=days_since_sat)
+    if days_since_sat == 0:
+        last_sat -= timedelta(days=7)
+    return last_sat
+
+
+def default_date_range(min_date: date, max_date: date) -> tuple[date, date]:
+    """Jan 1 of the current year through the most recent completed Saturday, clamped to data."""
+    year_start = date(date.today().year, 1, 1)
+    start = max(min_date, year_start)
+    end = min(max_date, most_recent_completed_saturday())
+    if start > end:
+        return min_date, max_date
+    return start, end
+
+
 def render_sidebar(df: pd.DataFrame) -> tuple:
     st.sidebar.title("Filters")
     st.sidebar.caption("Applied across every tab")
 
     min_date = df["created_date"].min().date()
     max_date = df["created_date"].max().date()
+    default_start, default_end = default_date_range(min_date, max_date)
 
     date_range = st.sidebar.date_input(
         "Date range",
-        value=(min_date, max_date),
+        value=(default_start, default_end),
         min_value=min_date,
         max_value=max_date,
+        key="sidebar_date_range",
+        help="Defaults to Jan 1 of this year through the most recent completed Saturday.",
     )
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
         start_date, end_date = date_range
     else:
-        start_date, end_date = min_date, max_date
+        start_date, end_date = default_start, default_end
 
     groups = st.sidebar.multiselect(
         "Support group",
@@ -478,6 +502,52 @@ def render_kpi_row(kpis: dict) -> None:
     c5.metric("Avg CSAT", f"{kpis['avg_csat']:.2f}" if kpis["avg_csat"] else "—")
 
 
+DEFAULT_TREND_GRAIN = "Weekly"
+TREND_GRAIN_OPTIONS = list(VOLUME_GRAIN_CONFIG.keys())
+
+
+def _on_trend_grain_change(source_key: str) -> None:
+    """Keep Support Operations / SLA Trends / Enterprise View on the same grain."""
+    st.session_state["trend_grain"] = st.session_state[source_key]
+
+
+def render_trend_controls(*, widget_key: str, first: bool = False) -> str:
+    """Shared trend grain control — one selection syncs across dashboard tabs."""
+    if "trend_grain" not in st.session_state:
+        st.session_state["trend_grain"] = DEFAULT_TREND_GRAIN
+
+    # Align this tab's widget with the shared value before it renders.
+    st.session_state[widget_key] = st.session_state["trend_grain"]
+
+    section(
+        "Trend controls",
+        "Shared across Support Operations, SLA Trends, and Enterprise View.",
+        first=first,
+    )
+    return st.radio(
+        "Trend grain",
+        options=TREND_GRAIN_OPTIONS,
+        horizontal=True,
+        key=widget_key,
+        on_change=_on_trend_grain_change,
+        args=(widget_key,),
+        help="Aggregate time-series charts to the selected period. Shared across Operations, SLA Trends, and Enterprise.",
+    )
+
+
+def csat_period_series(df: pd.DataFrame, grain: str = "Weekly") -> pd.DataFrame:
+    """Average CSAT rolled to the selected grain."""
+    if df.empty or "satisfaction_rating" not in df.columns:
+        return pd.DataFrame()
+    work = df[["created_date", "satisfaction_rating"]].copy()
+    work["period"] = period_bucket(work["created_date"], grain)
+    return (
+        work.groupby("period", as_index=False)
+        .agg(avg_csat=("satisfaction_rating", "mean"))
+        .sort_values("period")
+    )
+
+
 def tab_operations(df: pd.DataFrame) -> None:
     """Tab 1 — Support Operations Overview."""
     tab_lead(
@@ -504,21 +574,13 @@ def tab_operations(df: pd.DataFrame) -> None:
         st.info("No tickets match the current filters.")
         return
 
+    grain = render_trend_controls(widget_key="ops_trend_grain")
     section(
         "Ticket volume",
-        "Toggle the grain — title and rolling average update with the selection.",
+        "Title and rolling average update with the shared trend grain.",
     )
-    volume_grain = st.radio(
-        "Volume grain",
-        options=list(VOLUME_GRAIN_CONFIG.keys()),
-        index=0,
-        horizontal=True,
-        key="ops_volume_grain",
-        label_visibility="collapsed",
-        help="Aggregate ticket volume and the rolling average to the selected period.",
-    )
-    vol_cfg = VOLUME_GRAIN_CONFIG[volume_grain]
-    volume = volume_ops_series(df, volume_grain)
+    vol_cfg = VOLUME_GRAIN_CONFIG[grain]
+    volume = volume_ops_series(df, grain)
     if volume.empty:
         st.info("No tickets match the current filters.")
         return
@@ -548,7 +610,7 @@ def tab_operations(df: pd.DataFrame) -> None:
         barmode="overlay",
     )
     st.plotly_chart(style_fig(fig_vol, 380), width="stretch")
-    st.caption("For SLA attainment over the same grains, open the **SLA Trends** tab.")
+    st.caption("Trend grain is shared with **SLA Trends** and **Enterprise View**.")
 
     section("Where work lands", "Volume mix by support group and priority.")
     left, right = st.columns(2)
@@ -636,21 +698,6 @@ def tab_sla_trends(df: pd.DataFrame) -> None:
         st.info("No tickets match the current filters.")
         return
 
-    section("Trend controls", "Grain applies to every chart on this tab.", first=True)
-    grain = st.radio(
-        "Trend grain",
-        options=list(VOLUME_GRAIN_CONFIG.keys()),
-        index=1,  # Weekly default
-        horizontal=True,
-        key="sla_trend_period",
-        help="Aggregate SLA trends to the selected period. Weekly is a good default for long ranges.",
-    )
-
-    series = sla_period_series(df, grain=grain)
-    if series.empty:
-        st.info("No SLA-eligible tickets in this period.")
-        return
-
     kpis = kpi_block(df)
     fr_elig = int(df["is_fr_sla_eligible"].fillna(False).astype(bool).sum())
     res_elig = int(df["is_res_sla_eligible"].fillna(False).astype(bool).sum())
@@ -659,7 +706,7 @@ def tab_sla_trends(df: pd.DataFrame) -> None:
     avg_fr_bh = float(df["first_response_business_hours"].mean()) if "first_response_business_hours" in df else None
     avg_res_bh = float(df["resolution_business_hours"].mean()) if "resolution_business_hours" in df else None
 
-    section("SLA snapshot", "Business-hours metrics for the filtered ticket set.")
+    section("SLA snapshot", "Business-hours metrics for the filtered ticket set.", first=True)
     m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("First response SLA", fmt_pct(kpis["pct_fr_sla"]))
     m2.metric("Resolution SLA", fmt_pct(kpis["pct_res_sla"]))
@@ -667,6 +714,12 @@ def tab_sla_trends(df: pd.DataFrame) -> None:
     m4.metric("Avg resolution (business h)", fmt_hours(avg_res_bh))
     m5.metric("FR breaches", f"{fr_elig - fr_met:,}")
     m6.metric("Resolution breaches", f"{res_elig - res_met:,}")
+
+    grain = render_trend_controls(widget_key="sla_trend_grain")
+    series = sla_period_series(df, grain=grain)
+    if series.empty:
+        st.info("No SLA-eligible tickets in this period.")
+        return
 
     section(
         "SLA attainment over time",
@@ -1358,17 +1411,24 @@ def tab_enterprise(df_all_filtered_except_ent: pd.DataFrame) -> None:
     e1.metric("First Response SLA", fmt_pct(kpis["pct_fr_sla"]))
     e2.metric("Resolution SLA", fmt_pct(kpis["pct_res_sla"]))
 
-    section("Volume & quality trends", "Daily grain for the Enterprise segment.")
-    daily = daily_ops_series(ent)
-    if daily.empty:
+    grain = render_trend_controls(widget_key="ent_trend_grain")
+    vol_cfg = VOLUME_GRAIN_CONFIG[grain]
+    section(
+        "Volume & quality trends",
+        f"{grain} grain for the Enterprise segment — synced with Operations and SLA Trends.",
+    )
+    volume = volume_ops_series(ent, grain)
+    sla = sla_period_series(ent, grain=grain)
+    csat = csat_period_series(ent, grain=grain)
+    if volume.empty:
         st.info("Not enough Enterprise history to plot trends.")
         return
 
     fig = go.Figure()
     fig.add_trace(
         go.Scatter(
-            x=daily["created_date"],
-            y=daily["ticket_volume"],
+            x=volume["period"],
+            y=volume["ticket_volume"],
             name="Volume",
             fill="tozeroy",
             line=dict(color="#059669", width=2),
@@ -1376,14 +1436,14 @@ def tab_enterprise(df_all_filtered_except_ent: pd.DataFrame) -> None:
     )
     fig.add_trace(
         go.Scatter(
-            x=daily["created_date"],
-            y=daily["rolling_7d"],
-            name="7-day avg",
+            x=volume["period"],
+            y=volume["rolling_avg"],
+            name=vol_cfg["rolling_name"],
             line=dict(color="#064E3B", width=2, dash="dash"),
         )
     )
     fig.update_layout(
-        title="Enterprise ticket volume",
+        title=f"Enterprise ticket volume ({grain.lower()})",
         yaxis_title="Tickets",
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
     )
@@ -1392,38 +1452,43 @@ def tab_enterprise(df_all_filtered_except_ent: pd.DataFrame) -> None:
     left, right = st.columns(2)
     with left:
         fig_csat = go.Figure()
-        fig_csat.add_trace(
-            go.Scatter(
-                x=daily["created_date"],
-                y=daily["avg_csat"],
-                mode="lines",
-                line=dict(color="#2563EB", width=2),
-                name="Avg CSAT",
+        if not csat.empty:
+            fig_csat.add_trace(
+                go.Scatter(
+                    x=csat["period"],
+                    y=csat["avg_csat"],
+                    mode="lines",
+                    line=dict(color="#2563EB", width=2),
+                    name="Avg CSAT",
+                )
             )
+        fig_csat.update_layout(
+            title=f"Enterprise CSAT trend ({grain.lower()})",
+            yaxis=dict(range=[1, 5]),
         )
-        fig_csat.update_layout(title="Enterprise CSAT trend", yaxis=dict(range=[1, 5]))
         st.plotly_chart(style_fig(fig_csat, 320), width="stretch")
 
     with right:
         fig_sla = go.Figure()
-        fig_sla.add_trace(
-            go.Scatter(
-                x=daily["created_date"],
-                y=daily["pct_fr_sla"],
-                name="FR SLA",
-                line=dict(color="#059669"),
+        if not sla.empty:
+            fig_sla.add_trace(
+                go.Scatter(
+                    x=sla["period"],
+                    y=sla["pct_fr_sla"],
+                    name="FR SLA",
+                    line=dict(color="#059669"),
+                )
             )
-        )
-        fig_sla.add_trace(
-            go.Scatter(
-                x=daily["created_date"],
-                y=daily["pct_res_sla"],
-                name="Resolution SLA",
-                line=dict(color="#D97706"),
+            fig_sla.add_trace(
+                go.Scatter(
+                    x=sla["period"],
+                    y=sla["pct_res_sla"],
+                    name="Resolution SLA",
+                    line=dict(color="#D97706"),
+                )
             )
-        )
         fig_sla.update_layout(
-            title="Enterprise SLA attainment",
+            title=f"Enterprise SLA attainment ({grain.lower()})",
             yaxis_tickformat=".0%",
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
         )
