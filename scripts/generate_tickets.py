@@ -50,8 +50,9 @@ from agent_roster import load_agent_roster, resolve_roster_path, roster_to_expor
 SEED: int = 42
 
 # Date range of simulated tickets (UTC).
+# Prefer a recent window ending at "now" so the demo stays current.
 # END_DATE=None → generate through the current UTC time on each run.
-START_DATE: datetime = datetime(2023, 1, 1, tzinfo=timezone.utc)
+START_DATE: datetime = datetime(2025, 1, 1, tzinfo=timezone.utc)
 END_DATE: datetime | None = None
 
 

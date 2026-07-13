@@ -64,7 +64,9 @@ def main() -> None:
     else:
         print("Step 2/3: Skipping simulation")
 
-    dbt_cmd = [py, "-m", "dbt", "run", "--project-dir", str(PROJECT_ROOT)]
+    dbt_bin = PROJECT_ROOT / ".venv" / "bin" / "dbt"
+    dbt_exe = str(dbt_bin) if dbt_bin.exists() else "dbt"
+    dbt_cmd = [dbt_exe, "run", "--project-dir", str(PROJECT_ROOT)]
     if args.full_refresh or args.generate or args.force_simulation:
         dbt_cmd.append("--full-refresh")
         print("Step 3/3: Building dbt models (full refresh) …")
