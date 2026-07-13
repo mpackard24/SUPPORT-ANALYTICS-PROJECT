@@ -17,6 +17,10 @@ data/generated/*
 !data/generated/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+# Demo Parquet for Streamlit Community Cloud (app.py reads these)
+!data/processed/int_ticket_metrics.parquet
+!data/processed/stg_tickets_app.parquet
+!data/processed/mart_priority_scoring.parquet
 data/raw/*
 !data/raw/.gitkeep
 

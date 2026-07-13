@@ -57,7 +57,10 @@ GROUP_COLORS = TEAM_COLORS
 def load_tickets(_data_version: str) -> pd.DataFrame:
     """Load ticket-level metrics and agent fields from the modeling layer."""
     metrics_path = PROCESSED / "int_ticket_metrics.parquet"
-    staging_path = PROCESSED / "stg_tickets.parquet"
+    # Prefer slim export (committed for Streamlit Cloud); fall back to full staging.
+    staging_path = PROCESSED / "stg_tickets_app.parquet"
+    if not staging_path.exists():
+        staging_path = PROCESSED / "stg_tickets.parquet"
 
     if not metrics_path.exists() or not staging_path.exists():
         return pd.DataFrame()

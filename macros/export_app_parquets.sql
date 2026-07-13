@@ -26,6 +26,18 @@
           COPY (SELECT * FROM {{ rel }}) TO '{{ path }}' (FORMAT PARQUET)
         {% endset %}
         {% do run_query(sql) %}
+        {# Slim staging export for Streamlit Cloud (commit-friendly size) #}
+        {% if table_name == "stg_tickets" %}
+          {% set slim_path = export_dir ~ "/stg_tickets_app.parquet" %}
+          {% do log("Exporting stg_tickets_app → " ~ slim_path, info=True) %}
+          {% set slim_sql %}
+            COPY (
+              SELECT ticket_id, assignee_id, assignee_name, channel, language
+              FROM {{ rel }}
+            ) TO '{{ slim_path }}' (FORMAT PARQUET)
+          {% endset %}
+          {% do run_query(slim_sql) %}
+        {% endif %}
       {% else %}
         {% do log("Skip export (relation not found): " ~ table_name, info=True) %}
       {% endif %}

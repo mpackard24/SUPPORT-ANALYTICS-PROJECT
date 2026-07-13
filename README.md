@@ -84,12 +84,12 @@ See `models/staging/schema.yml`:
 ## Publishing on Streamlit
 
 1. Move this folder to its own git repository.
-2. Either:
-   - **Commit small Parquet samples** for a demo, or
-   - Run the pipeline in CI and upload artifacts, or
-   - Point the app at cloud storage later.
+2. **Commit the demo Parquet exports** the app needs (allowed in `.gitignore`):
+   - `data/processed/int_ticket_metrics.parquet`
+   - `data/processed/stg_tickets_app.parquet` (slim staging; produced by `dbt run`)
+   - `data/processed/mart_priority_scoring.parquet`
 3. Set the Streamlit main file to `app.py`.
-4. Add `requirements.txt` (already included). Large `data/processed` CSVs are gitignored by default — export / host Parquet separately for production demos.
+4. Push to GitHub and redeploy. Streamlit Cloud clones the repo — without these files the app shows “Processed data not found.”
 
 ## Regenerating data
 

@@ -13,6 +13,7 @@ DATA_REFERENCE = PROJECT_ROOT / "data" / "reference"
 
 TICKETS_SIMULATED_CSV = DATA_PROCESSED / "tickets_simulated.csv"
 STG_TICKETS_PARQUET = DATA_PROCESSED / "stg_tickets.parquet"
+STG_TICKETS_APP_PARQUET = DATA_PROCESSED / "stg_tickets_app.parquet"
 INT_TICKET_METRICS_PARQUET = DATA_PROCESSED / "int_ticket_metrics.parquet"
 MART_PRIORITY_SCORING_PARQUET = DATA_PROCESSED / "mart_priority_scoring.parquet"
 
@@ -28,6 +29,7 @@ def processed_data_version() -> str:
     """Cache-busting token for Streamlit (mtimes of key artifacts)."""
     paths = [
         INT_TICKET_METRICS_PARQUET,
+        STG_TICKETS_APP_PARQUET,
         STG_TICKETS_PARQUET,
         MART_PRIORITY_SCORING_PARQUET,
         TICKETS_SIMULATED_CSV,
